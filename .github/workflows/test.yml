@@ -1,0 +1,24 @@
+name: test
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "29"
+          gleam-version: "1.18.1"
+          rebar3-version: "3"
+          # elixir-version: "1"
+      - run: |
+          for project in shared client server; do
+            (cd "$project" && gleam deps download && gleam test && gleam format --check src test)
+          done
