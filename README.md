@@ -1,5 +1,7 @@
 # todo_app
 
+[![build](https://github.com/DrearyLisper/todo_app/actions/workflows/build.yml/badge.svg)](https://github.com/DrearyLisper/todo_app/actions/workflows/build.yml)
+
 A simple full-stack TODO web app built with [Lustre](https://hexdocs.pm/lustre)
 following the [full-stack applications guide](https://lustre.hexdocs.pm/guide/06-full-stack-applications.html).
 
