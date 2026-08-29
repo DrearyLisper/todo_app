@@ -1,3 +1,4 @@
+import gleam/dynamic/decode
 import gleam/http/response.{type Response}
 import gleam/int
 import gleam/json
@@ -39,12 +40,21 @@ type Model {
     new_item: String,
     saving: Bool,
     error: Option(String),
+    dragging: Option(Int),
+    dragged: Bool,
   )
 }
 
 fn init(items: List(TodoItem)) -> #(Model, Effect(Message)) {
   let model =
-    Model(items: items, new_item: "", saving: False, error: option.None)
+    Model(
+      items: items,
+      new_item: "",
+      saving: False,
+      error: option.None,
+      dragging: option.None,
+      dragged: False,
+    )
 
   #(model, effect.none())
 }
@@ -57,6 +67,9 @@ type Message {
   UserDeletedItem(index: Int)
   UserToggledItem(index: Int)
   UserTypedNewItem(String)
+  UserDragStarted(index: Int)
+  UserDragOver(index: Int)
+  UserDragEnded
 }
 
 fn update(model: Model, message: Message) -> #(Model, Effect(Message)) {
@@ -110,6 +123,55 @@ fn update(model: Model, message: Message) -> #(Model, Effect(Message)) {
           |> list.flatten(),
       )
       |> save
+
+    UserDragStarted(index) -> #(
+      Model(..model, dragging: option.Some(index), dragged: False),
+      effect.none(),
+    )
+
+    UserDragOver(index) ->
+      case model.dragging {
+        option.Some(from) if from != index -> #(
+          Model(
+            ..model,
+            items: move_item(model.items, from, index),
+            dragging: option.Some(index),
+            dragged: True,
+          ),
+          effect.none(),
+        )
+        _ -> #(model, effect.none())
+      }
+
+    UserDragEnded ->
+      case model.dragging, model.dragged {
+        option.Some(_), True -> Model(..model, dragging: option.None) |> save
+        option.Some(_), False -> #(
+          Model(..model, dragging: option.None),
+          effect.none(),
+        )
+        option.None, _ -> #(model, effect.none())
+      }
+  }
+}
+
+fn move_item(items: List(TodoItem), from: Int, to: Int) -> List(TodoItem) {
+  case from == to, items {
+    True, _ -> items
+    False, [] -> items
+    False, _ -> {
+      let #(before, middle) = list.split(items, from)
+      case middle {
+        [] -> items
+        [moved, ..rest] -> {
+          let without = list.append(before, rest)
+          let #(head, tail) = list.split(without, to)
+          head
+          |> list.append([moved])
+          |> list.append(tail)
+        }
+      }
+    }
   }
 }
 
@@ -140,7 +202,7 @@ fn view(model: Model) -> Element(Message) {
       },
     ]),
     view_new_item(model.new_item),
-    view_todo_list(model.items),
+    view_todo_list(model),
     case model.saving {
       True -> html.p([attribute.class("status")], [html.text("Saving...")])
       False -> element.none()
@@ -179,30 +241,70 @@ fn view_new_item(new_item: String) -> Element(Message) {
   ])
 }
 
-fn view_todo_list(items: List(TodoItem)) -> Element(Message) {
-  case items {
+fn view_todo_list(model: Model) -> Element(Message) {
+  case model.items {
     [] ->
       html.p([attribute.class("empty-state")], [
         html.text("Nothing here yet. Add your first task above!"),
       ])
     _ -> {
+      let list_class =
+        "todo-list"
+        <> case model.dragging {
+          option.Some(_) -> " dragging-list"
+          option.None -> ""
+        }
       html.ul(
-        [attribute.class("todo-list")],
-        list.index_map(items, fn(item, index) { view_todo_item(item, index) }),
+        [attribute.class(list_class)],
+        list.index_map(model.items, fn(item, index) {
+          view_todo_item(item, index, model)
+        }),
       )
     }
   }
 }
 
-fn view_todo_item(item: TodoItem, index: Int) -> Element(Message) {
-  html.li(
-    [
-      attribute.class(case item.done {
+fn view_todo_item(
+  item: TodoItem,
+  index: Int,
+  model: Model,
+) -> Element(Message) {
+  let is_dragging = case model.dragging {
+    option.Some(i) -> i == index
+    option.None -> False
+  }
+  let class =
+    {
+      case item.done {
         True -> "todo-item done"
         False -> "todo-item"
-      }),
+      }
+    }
+    <> case is_dragging {
+      True -> " dragging"
+      False -> ""
+    }
+
+  html.li(
+    [
+      attribute.class(class),
+      attribute.draggable(True),
+      attribute.title("Drag to reorder"),
+      event.on("dragstart", decode.success(UserDragStarted(index))),
+      event.prevent_default(event.on(
+        "dragover",
+        decode.success(UserDragOver(index)),
+      )),
+      event.on("dragend", decode.success(UserDragEnded)),
     ],
     [
+      html.span(
+        [
+          attribute.class("drag-handle"),
+          attribute.aria_hidden(True),
+        ],
+        [],
+      ),
       html.label([attribute.class("todo-check")], [
         html.input([
           attribute.type_("checkbox"),
