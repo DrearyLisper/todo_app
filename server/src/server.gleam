@@ -71,9 +71,18 @@ fn serve_index(db: storail.Collection(List(TodoItem))) -> Response {
   let items = fetch_items_from_db(db)
 
   let html =
-    html.html([], [
+    html.html([attribute.lang("en")], [
       html.head([], [
+        html.meta([attribute.charset("utf-8")]),
+        html.meta([
+          attribute.name("viewport"),
+          attribute.content("width=device-width, initial-scale=1"),
+        ]),
         html.title([], "TODO List"),
+        html.link([
+          attribute.rel("stylesheet"),
+          attribute.href("/static/app.css"),
+        ]),
         html.script(
           [attribute.type_("application/json"), attribute.id("model")],
           json.to_string(todos.todo_list_to_json(items)),

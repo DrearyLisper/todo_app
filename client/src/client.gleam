@@ -1,4 +1,5 @@
 import gleam/http/response.{type Response}
+import gleam/int
 import gleam/json
 import gleam/list
 import gleam/option.{type Option}
@@ -127,85 +128,98 @@ fn save_list(items: List(TodoItem)) -> Effect(Message) {
 // VIEW ------------------------------------------------------------------------
 
 fn view(model: Model) -> Element(Message) {
-  let styles = [
-    #("max-width", "40ch"),
-    #("margin", "0 auto"),
-    #("display", "flex"),
-    #("flex-direction", "column"),
-    #("gap", "1em"),
-  ]
-
-  html.div([attribute.styles(styles)], [
-    html.h1([], [html.text("TODO")]),
-    view_todo_list(model.items),
+  html.div([attribute.class("app")], [
+    html.header([attribute.class("app-header")], [
+      html.h1([], [html.text("TODO")]),
+      case list.is_empty(model.items) {
+        True -> element.none()
+        False ->
+          html.span([attribute.class("count")], [
+            html.text(int.to_string(remaining(model.items)) <> " left"),
+          ])
+      },
+    ]),
     view_new_item(model.new_item),
+    view_todo_list(model.items),
     case model.saving {
-      True -> html.p([], [html.text("Saving...")])
+      True -> html.p([attribute.class("status")], [html.text("Saving...")])
       False -> element.none()
     },
     case model.error {
       option.None -> element.none()
       option.Some(error) ->
-        html.div([attribute.style("color", "red")], [html.text(error)])
+        html.p([attribute.class("error")], [html.text(error)])
     },
   ])
 }
 
+fn remaining(items: List(TodoItem)) -> Int {
+  items
+  |> list.filter(fn(item) { !item.done })
+  |> list.length()
+}
+
 fn view_new_item(new_item: String) -> Element(Message) {
-  html.div([attribute.styles([#("display", "flex"), #("gap", "0.5em")])], [
+  html.div([attribute.class("add-row")], [
     html.input([
-      attribute.placeholder("Enter a new todo"),
+      attribute.type_("text"),
+      attribute.placeholder("Add a new task..."),
       attribute.value(new_item),
+      attribute.autofocus(True),
       event.on_input(UserTypedNewItem),
     ]),
-    html.button([event.on_click(UserAddedItem)], [html.text("Add")]),
+    html.button(
+      [
+        attribute.class("btn btn-add"),
+        attribute.type_("button"),
+        event.on_click(UserAddedItem),
+      ],
+      [html.text("Add")],
+    ),
   ])
 }
 
 fn view_todo_list(items: List(TodoItem)) -> Element(Message) {
   case items {
-    [] -> html.p([], [html.text("No todos yet. Add one above!")])
+    [] ->
+      html.p([attribute.class("empty-state")], [
+        html.text("Nothing here yet. Add your first task above!"),
+      ])
     _ -> {
       html.ul(
-        [],
-        list.index_map(items, fn(item, index) {
-          html.li([], [view_todo_item(item, index)])
-        }),
+        [attribute.class("todo-list")],
+        list.index_map(items, fn(item, index) { view_todo_item(item, index) }),
       )
     }
   }
 }
 
 fn view_todo_item(item: TodoItem, index: Int) -> Element(Message) {
-  html.div(
+  html.li(
     [
-      attribute.styles([
-        #("display", "flex"),
-        #("align-items", "center"),
-        #("gap", "0.5em"),
-      ]),
+      attribute.class(case item.done {
+        True -> "todo-item done"
+        False -> "todo-item"
+      }),
     ],
     [
-      html.input([
-        attribute.type_("checkbox"),
-        attribute.checked(item.done),
-        event.on_check(fn(_checked) { UserToggledItem(index) }),
+      html.label([attribute.class("todo-check")], [
+        html.input([
+          attribute.type_("checkbox"),
+          attribute.checked(item.done),
+          event.on_check(fn(_checked) { UserToggledItem(index) }),
+        ]),
+        html.span([attribute.class("todo-label")], [html.text(item.label)]),
       ]),
-      html.span(
+      html.button(
         [
-          attribute.styles([
-            #("flex", "1"),
-            #("text-decoration", case item.done {
-              True -> "line-through"
-              False -> "none"
-            }),
-          ]),
+          attribute.class("btn-delete"),
+          attribute.type_("button"),
+          attribute.title("Delete task"),
+          event.on_click(UserDeletedItem(index)),
         ],
-        [html.text(item.label)],
+        [html.text("✕")],
       ),
-      html.button([event.on_click(UserDeletedItem(index))], [
-        html.text("Delete"),
-      ]),
     ],
   )
 }

@@ -7,4 +7,4 @@ node_modules/
 client/.lustre/
 client/dist/
 server/data/
-server/priv/static/
+server/priv/static/client.js
